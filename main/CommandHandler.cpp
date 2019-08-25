@@ -26,7 +26,7 @@
 
 #include "CommandHandler.h"
 
-const char FIRMWARE_VERSION[6] = "1.3.1";
+const char FIRMWARE_VERSION[6] = "1.3.5";
 
 /*IPAddress*/uint32_t resolvedHostname;
 
@@ -977,6 +977,45 @@ int setAnalogWrite(const uint8_t command[], uint8_t response[])
   return 6;
 }
 
+#define ENDIAN(val) (val << 8) | (val >> 8 )
+static uint16_t analogValues[7];
+static uint8_t adcPins[] = {5, 4, 7, 6, 3, 0};
+int getAnalogRead(const uint8_t command[], uint8_t response[])
+{
+  uint8_t num = command[4];
+  num = 6;
+
+  response[2] = num; // number of parameters
+  response[3] = 2; // parameter 1 length
+
+  memset(&response[4], 0x2, num*3-1);
+
+  for(int i=0; i<num; i++)
+  {
+    uint16_t tmp = ENDIAN(analogValues[5-i]/analogValues[6]);
+    memcpy(&response[4+i*3], &tmp, 2);
+  }
+
+  memset(analogValues, 0x0, sizeof(analogValues));
+  return num*3 + 4;
+}
+
+int sampleADC(const uint8_t command[], uint8_t response[])
+{
+  for(int i=0; i<6;i++)
+  {
+      uint16_t v = analogRead(adcPins[i]);
+      analogValues[i] += v;
+  }
+  analogValues[6] += 1;
+
+  response[2] = 1; // number of parameters
+  response[3] = 1; // parameter 1 length
+  response[4] = 1;
+
+  return 6;
+}
+
 int wpa2EntSetIdentity(const uint8_t command[], uint8_t response[]) {
   char identity[32 + 1];
 
@@ -1065,7 +1104,7 @@ const CommandHandlerType commandHandlers[] = {
   NULL, NULL, NULL, NULL, sendDataTcp, getDataBufTcp, insertDataBuf, NULL, NULL, NULL, wpa2EntSetIdentity, wpa2EntSetUsername, wpa2EntSetPassword, wpa2EntSetCACert, wpa2EntSetCertKey, wpa2EntEnable,
 
   // 0x50 -> 0x5f
-  setPinMode, setDigitalWrite, setAnalogWrite,
+  setPinMode, setDigitalWrite, setAnalogWrite, getAnalogRead, sampleADC,
 };
 
 #define NUM_COMMAND_HANDLERS (sizeof(commandHandlers) / sizeof(commandHandlers[0]))
